@@ -53,7 +53,7 @@ class ITSZDCAnomalyStudy : public Task
   std::shared_ptr<DataRequest> mDataRequest;
   bool mUseMC;
   size_t mTFn = 0;
-  const o2::itsmft::TopologyDictionary *dict;
+  const o2::itsmft::TopologyDictionary* dict;
 };
 
 void ITSZDCAnomalyStudy::updateTimeDependentParams(ProcessingContext& pc)
@@ -71,11 +71,10 @@ void ITSZDCAnomalyStudy::init(InitContext& ic)
 {
   LOGP(info, "Initializing ITSZDCAnomalyStudy");
   LOGP(info, "Fetching ClusterDictionary");
-  auto &mgr = o2::ccdb::BasicCCDBManager::instance();
+  auto& mgr = o2::ccdb::BasicCCDBManager::instance();
   mgr.setURL("http://alice-ccdb.cern.ch");
   mgr.setTimestamp(o2::ccdb::getCurrentTimestamp());
   dict = mgr.get<o2::itsmft::TopologyDictionary>("ITS/Calib/ClusterDictionary");
-  
 }
 
 void ITSZDCAnomalyStudy::endOfStream(EndOfStreamContext&)
@@ -116,11 +115,11 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
   auto Info2 = recoData.getZDCInfo();
   LOGP(info, "sizeof ZDC RC: {}, {}, {}, {}", RecBC.size(), Energy.size(), TDCData.size(), Info2.size());
 
-LOGP(info, "Retrieving ITS clusters");
-auto rofRecVec = recoData.getITSClustersROFRecords();
-auto clusArr = recoData.getITSClusters();
-auto clusPatt = recoData.getITSClustersPatterns();
-LOGP(info, "sizeof ITS RC: {}, {}, {}", clusArr.size(), clusPatt.size(), rofRecVec.size());
+  LOGP(info, "Retrieving ITS clusters");
+  auto rofRecVec = recoData.getITSClustersROFRecords();
+  auto clusArr = recoData.getITSClusters();
+  auto clusPatt = recoData.getITSClustersPatterns();
+  LOGP(info, "sizeof ITS RC: {}, {}, {}", clusArr.size(), clusPatt.size(), rofRecVec.size());
 
   ev.init(RecBC, Energy, TDCData, Info2);
   while (ev.next()) {
