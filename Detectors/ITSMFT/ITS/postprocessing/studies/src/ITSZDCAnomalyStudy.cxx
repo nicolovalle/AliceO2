@@ -23,6 +23,7 @@
 // ZDC
 #include "DataFormatsZDC/RecEventFlat.h"
 
+
 #include "Framework/Task.h"
 #include "Framework/Logger.h"
 
@@ -53,7 +54,7 @@ class ITSZDCAnomalyStudy : public Task
   std::shared_ptr<DataRequest> mDataRequest;
   bool mUseMC;
   size_t mTFn = 0;
-  const o2::itsmft::TopologyDictionary *dict;
+  const o2::itsmft::TopologyDictionary *mDict = nullptr;
 };
 
 void ITSZDCAnomalyStudy::updateTimeDependentParams(ProcessingContext& pc)
@@ -74,7 +75,7 @@ void ITSZDCAnomalyStudy::init(InitContext& ic)
   auto &mgr = o2::ccdb::BasicCCDBManager::instance();
   mgr.setURL("http://alice-ccdb.cern.ch");
   mgr.setTimestamp(o2::ccdb::getCurrentTimestamp());
-  dict = mgr.get<o2::itsmft::TopologyDictionary>("ITS/Calib/ClusterDictionary");
+  mDict = mgr.get<o2::itsmft::TopologyDictionary>("ITS/Calib/ClusterDictionary");
   
 }
 
@@ -120,7 +121,7 @@ LOGP(info, "Retrieving ITS clusters");
 auto rofRecVec = recoData.getITSClustersROFRecords();
 auto clusArr = recoData.getITSClusters();
 auto clusPatt = recoData.getITSClustersPatterns();
-LOGP(info, "sizeof ITS RC: {}, {}, {}", clusArr.size(), clusPatt.size(), rofRecVec.size());
+LOGP(info, "sizeof ITS RC : {}, {}, {}", clusArr.size(), clusPatt.size(), rofRecVec.size());
 
   ev.init(RecBC, Energy, TDCData, Info2);
   while (ev.next()) {
