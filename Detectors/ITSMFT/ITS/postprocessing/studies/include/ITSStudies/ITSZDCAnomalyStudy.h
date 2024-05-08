@@ -20,7 +20,7 @@ namespace o2::its::study
 
 using mask_t = o2::dataformats::GlobalTrackID::mask_t;
 
-o2::framework::DataProcessorSpec getITSZDCAnomalyStudy(mask_t srcClustersMask, bool useMC);
+ o2::framework::DataProcessorSpec getITSZDCAnomalyStudy(mask_t srcTracksMask, mask_t srcClustersMask, bool useMC);
 
 } // namespace o2::its::study
 #endif

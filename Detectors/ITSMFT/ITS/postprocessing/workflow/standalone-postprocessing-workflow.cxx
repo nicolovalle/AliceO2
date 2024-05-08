@@ -130,7 +130,7 @@ WorkflowSpec defineDataProcessing(ConfigContext const& configcontext)
     if (!configcontext.options().get<bool>("input-from-upstream")) {
       o2::globaltracking::InputHelper::addInputSpecs(configcontext, specs, srcCls, srcTrc, srcTrc, useMC, srcCls, srcTrc);
     }
-    specs.emplace_back(o2::its::study::getITSZDCAnomalyStudy(srcTrc, useMC));
+    specs.emplace_back(o2::its::study::getITSZDCAnomalyStudy(srcTrc, srcCls, useMC));
   }
 
   if (!anyStudy) {
