@@ -174,7 +174,8 @@ void ITSZDCAnomalyStudy::endOfStream(EndOfStreamContext&)
 
 void ITSZDCAnomalyStudy::run(ProcessingContext& pc)
 {
-  LOGP(info, "Running ITSZDCAnomalyStudy on TF: {}", mTFn++);
+  mTFn++;
+  LOGP(info, "Running ITSZDCAnomalyStudy on TF: {}", mTFn);
   o2::globaltracking::RecoContainer recoData;
   recoData.collectData(pc, *mDataRequest.get());
   // updateTimeDependentParams(pc);
