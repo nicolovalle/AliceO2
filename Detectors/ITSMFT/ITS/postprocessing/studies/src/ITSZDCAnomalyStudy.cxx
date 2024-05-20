@@ -59,6 +59,8 @@ class ITSZDCAnomalyStudy : public Task
   std::vector<o2::itsmft::ClusterPattern> mPatterns;
 
   int ChipToLayer(int chip);
+
+  int NStaves[7] = {12, 16, 20, 24, 30, 42, 48};
   int bcdistance(long orb1, int bc1, long orb2, int bc2);
   std::pair<int,int> findclosestbkg(long orb, int bc, std::map<long,std::set<int>> ZDC);
   
@@ -71,18 +73,20 @@ class ITSZDCAnomalyStudy : public Task
   std::unique_ptr<TH1F> ZNACall;
   std::unique_ptr<TH1F> ZDCtagBC;
   std::unique_ptr<TH1I> Counters;
-  std::unique_ptr<TTree> ITSEvtTree;
+  std::unique_ptr<TTree> ITSChipEvtTree;
   */
   TH1F* ZNACall;
   TH1F* ZDCtagBC;
   TH1I* Counters;
-  TTree* ITSEvtTree;
+  TTree* ITSChipEvtTree;
+  TTree* ITSStaveEvtTree;
   const o2::itsmft::TopologyDictionary *mDict = nullptr;
 
   // Tree variables
   int Tbc;
   long Torbit;
   int Tchip;
+  double Tphi;
   int Trofinorbit;
   int TZDCtag;
   int Tclosest_low, Tclosest_up;
@@ -90,6 +94,16 @@ class ITSZDCAnomalyStudy : public Task
   int Tnclus_s20, Tnclus_s100, Tnclus_s150;
   int Tnclus_c20, Tnclus_c100, Tnclus_c128;
   double Tnhit1, Tnhit10;
+
+  // Stave tree variables
+  int Sstave;
+  int Snchip;
+  double Sphi;
+  int Snhit, Snclus;
+  int Snclus_s20, Snclus_s100, Snclus_s150;
+  int Snclus_c20, Snclus_c100, Snclus_c128;
+  double Snhit1, Snhit10;
+  
 };
 
 void ITSZDCAnomalyStudy::updateTimeDependentParams(ProcessingContext& pc)
@@ -127,27 +141,48 @@ void ITSZDCAnomalyStudy::init(InitContext& ic)
   Counters->GetXaxis()->SetBinLabel(4,"ROF-ZDC tagged");
   
   /*
-  ITSEvtTree.reset(new TTree("evt","evt"));
+  ITSChipEvtTree.reset(new TTree("evt","evt"));
   */
-  ITSEvtTree = new TTree("evt","evt");
+  ITSChipEvtTree = new TTree("chipevt","chipevt");
+  ITSStaveEvtTree = new TTree("staveevt","staveevt");
 
-  ITSEvtTree->Branch("orbit",&Torbit,"orbit/L");
-  ITSEvtTree->Branch("bc",&Tbc,"bc/I");
-  ITSEvtTree->Branch("chip",&Tchip,"chip/I");
-  //ITSEvtTree->Branch("rofinorbit",&Trofinorbit,"rofinorbit/I");
-  ITSEvtTree->Branch("zdctag",&TZDCtag,"zdctag/I");
-  ITSEvtTree->Branch("closest_low",&Tclosest_low,"closest_low/I");
-  ITSEvtTree->Branch("closest_up",&Tclosest_up,"closest_up/I");
-  ITSEvtTree->Branch("nhit",&Tnhit,"nhit/I");
-  ITSEvtTree->Branch("size1",&Tnhit1,"size1/D");
-  ITSEvtTree->Branch("size10",&Tnhit10,"size10/D");
-  ITSEvtTree->Branch("nclus",&Tnclus,"nclus/I");
-  ITSEvtTree->Branch("nclus_s20",&Tnclus_s20,"nclus_s20/I");
-  ITSEvtTree->Branch("nclus_s100",&Tnclus_s100,"nclus_s100/I");
-  ITSEvtTree->Branch("nclus_s150",&Tnclus_s150,"nclus_s150/I");
-  ITSEvtTree->Branch("nclus_c20",&Tnclus_c20,"nclus_c20/I");
-  ITSEvtTree->Branch("nclus_c100",&Tnclus_c100,"nclus_c100/I");
-  ITSEvtTree->Branch("nclus_c128",&Tnclus_c128,"nclus_c128/I");
+  ITSChipEvtTree->Branch("orbit",&Torbit,"orbit/L");
+  ITSChipEvtTree->Branch("bc",&Tbc,"bc/I");
+  ITSChipEvtTree->Branch("chip",&Tchip,"chip/I");
+  ITSChipEvtTree->Branch("phi",&Tphi,"phi/D");
+  //ITSChipEvtTree->Branch("rofinorbit",&Trofinorbit,"rofinorbit/I");
+  ITSChipEvtTree->Branch("zdctag",&TZDCtag,"zdctag/I");
+  ITSChipEvtTree->Branch("closest_low",&Tclosest_low,"closest_low/I");
+  ITSChipEvtTree->Branch("closest_up",&Tclosest_up,"closest_up/I");
+  ITSChipEvtTree->Branch("nhit",&Tnhit,"nhit/I");
+  ITSChipEvtTree->Branch("size1",&Tnhit1,"size1/D");
+  ITSChipEvtTree->Branch("size10",&Tnhit10,"size10/D");
+  ITSChipEvtTree->Branch("nclus",&Tnclus,"nclus/I");
+  ITSChipEvtTree->Branch("nclus_s20",&Tnclus_s20,"nclus_s20/I");
+  ITSChipEvtTree->Branch("nclus_s100",&Tnclus_s100,"nclus_s100/I");
+  ITSChipEvtTree->Branch("nclus_s150",&Tnclus_s150,"nclus_s150/I");
+  ITSChipEvtTree->Branch("nclus_c20",&Tnclus_c20,"nclus_c20/I");
+  ITSChipEvtTree->Branch("nclus_c100",&Tnclus_c100,"nclus_c100/I");
+  ITSChipEvtTree->Branch("nclus_c128",&Tnclus_c128,"nclus_c128/I");
+
+  ITSStaveEvtTree->Branch("orbit",&Torbit,"orbit/L");
+  ITSStaveEvtTree->Branch("bc",&Tbc,"bc/I");
+  ITSStaveEvtTree->Branch("stave",&Sstave,"stave/I");
+  ITSStaveEvtTree->Branch("phi",&Sphi,"phi/D");
+  ITSStaveEvtTree->Branch("zdctag",&TZDCtag,"zdctag/I");
+  ITSStaveEvtTree->Branch("closest_low",&Tclosest_low,"closest_low/I");
+  ITSStaveEvtTree->Branch("closest_up",&Tclosest_up,"closest_up/I");
+  ITSStaveEvtTree->Branch("nchip",&Snchip,"nchip/I");
+  ITSStaveEvtTree->Branch("nhit",&Snhit,"nhit/I");
+  ITSStaveEvtTree->Branch("size1",&Snhit1,"size1/D");
+  ITSStaveEvtTree->Branch("size10",&Snhit10,"size10/D");
+  ITSStaveEvtTree->Branch("nclus",&Snclus,"nclus/I");
+  ITSStaveEvtTree->Branch("nclus_s20",&Snclus_s20,"nclus_s20/I");
+  ITSStaveEvtTree->Branch("nclus_s100",&Snclus_s100,"nclus_s100/I");
+  ITSStaveEvtTree->Branch("nclus_s150",&Snclus_s150,"nclus_s150/I");
+  ITSStaveEvtTree->Branch("nclus_c20",&Snclus_c20,"nclus_c20/I");
+  ITSStaveEvtTree->Branch("nclus_c100",&Snclus_c100,"nclus_c100/I");
+  ITSStaveEvtTree->Branch("nclus_c128",&Snclus_c128,"nclus_c128/I");
   
   
 }
@@ -158,17 +193,25 @@ void ITSZDCAnomalyStudy::endOfStream(EndOfStreamContext&)
   LOGP(info, "End of stream for ITSZDCAnomalyStudy");
 
   std::string outfile1 = "output1.root";
+  std::string outfile2 = "output2.root";
   LOGP(info, "Writing {}", outfile1);
   TFile *F1 = TFile::Open(outfile1.c_str(),"recreate");
   ZNACall->Write();
   ZDCtagBC->Write();
   Counters->Write();
-  ITSEvtTree->Write();
+  ITSChipEvtTree->Write();
   F1->Close();
+  LOGP(info, "Writing {}", outfile2);
+  TFile *F2 = TFile::Open(outfile2.c_str(),"recreate");
+  ZNACall->Write();
+  ZDCtagBC->Write();
+  Counters->Write();
+  ITSStaveEvtTree->Write();
+  F2->Close();
   delete ZNACall;
   delete ZDCtagBC;
   delete Counters;
-  delete ITSEvtTree;
+  delete ITSChipEvtTree;
 
 }
 
@@ -318,8 +361,10 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
     //else LOGP(info,"DEBUGcl bkg: asking {}/{}, returning {} , {}. ZDCTag {}",Torbit,Tbc,Tclosest_low,Tclosest_up,TZDCtag);
 
     std::set<int> AvailableChips{};
-    std::map<int, std::vector<int>> MAPsize{};
-    std::map<int, std::vector<int>> MAPcols{};
+    std::vector<std::set<int>> AvailableChipsInStave(12+16+20,std::set<int>{});
+    std::map<int, std::vector<int>> MAPsize{}; // MAP[chip] = {list if sizes}
+    std::map<int, std::vector<int>> MAPcols{}; // MAP[chip] = {list of column span}
+
 
     for (int iclus = 0; iclus < clustersInRof.size(); iclus++){
 
@@ -369,6 +414,8 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
 
       MAPsize[chipid].push_back(npix);
       MAPcols[chipid].push_back(colspan);
+
+      AvailableChipsInStave[(int)(chipid/9)].insert(chipid);
       
  
     } // end of loop over clusters in rof
@@ -376,6 +423,8 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
     for (int ic : AvailableChips){
 
       Tchip = ic;
+
+      Tphi = 2.*TMath::Pi()* (0.5+(int)(ic/9)) / NStaves[ChipToLayer(ic)];
 
       Tnclus = MAPsize[ic].size();
 
@@ -417,14 +466,78 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
 
 
       // filling the Event Tree
-      ITSEvtTree->Fill();
+      ITSChipEvtTree->Fill();
 
     } // end of loop over available chips
 
+    for (int istave = 0; istave < (12+16+20); istave++){
 
-  
+      if (AvailableChipsInStave[istave].size() == 0) continue;
+
+      Snchip = 0;
+      Sstave = istave;
+
+      Snhit = Snclus = Snclus_s20 = Snclus_s100 = Snclus_s150 = 0;
+      Snhit1 = Snhit10 = 0.;
+      Snclus_c20 = Snclus_c100 = Snclus_c128 = 0;
+
+      std::vector<int> staveclustersizes{};
+      std::vector<int> staveclusterscolumns{};
+
+      for (int ic : AvailableChipsInStave[istave]){
+
+	staveclustersizes.insert(staveclustersizes.end(), MAPsize[ic].begin(), MAPsize[ic].end());
+	staveclusterscolumns.insert(staveclusterscolumns.end(), MAPcols[ic].begin(), MAPcols[ic].end());
+
+	Snchip++;
+	Sphi = 2.*TMath::Pi()* (0.5+(int)(ic/9)) / NStaves[ChipToLayer(ic)];
+      }
+
+      std::sort(staveclustersizes.begin(), staveclustersizes.end(), std::greater<int>());
+
+      Snclus = staveclustersizes.size();
+
+      int nclus10 = 0, nclus1 = 0;
+
+      for (int nh: staveclustersizes){
+
+	Snhit += nh;
+
+	if (nclus10 < 10){
+	  nclus10++;
+	  Snhit10 += 1.*nh;
+	}
+
+	if (nclus1 < 1){
+	  nclus1++;
+	  Snhit1 += 1.*nh;
+	}
+
+	Snclus_s20  += (nh >= 20);
+	Snclus_s100 += (nh >= 100);
+	Snclus_s150 += (nh >= 150);
+
+      }
+
+      Snhit10 = (nclus10 == 0) ? 0. : 1.*Tnhit10/nclus10;
+	
+
+      for (int nc: staveclusterscolumns){
+	Snclus_c20  += (nc >= 20);
+	Snclus_c100 += (nc >= 100);
+	Snclus_c128 += (nc >= 128);	
+      }
+
+
+      // filling the Event Tree
+      ITSStaveEvtTree->Fill();
+
+
+    } // end of loop over staves
+
+     
   } // end of loop over ROFs
-    
+  
   
     
   
