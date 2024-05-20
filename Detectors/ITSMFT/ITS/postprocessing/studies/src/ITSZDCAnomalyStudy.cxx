@@ -519,7 +519,7 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
 
       }
 
-      Snhit10 = (nclus10 == 0) ? 0. : 1.*Tnhit10/nclus10;
+      Snhit10 = (nclus10 == 0) ? 0. : 1.*Snhit10/nclus10;
 	
 
       for (int nc: staveclusterscolumns){
