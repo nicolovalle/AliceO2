@@ -67,7 +67,7 @@ class ITSZDCAnomalyStudy : public Task
   std::shared_ptr<o2::base::GRPGeomRequest> mGGCCDBRequest;
   std::shared_ptr<DataRequest> mDataRequest;
   bool mUseMC;
-  int mStrobe = 594;
+  int mStrobe = 198;
   size_t mTFn = 0;
   /*
   std::unique_ptr<TH1F> ZNACall;
@@ -424,7 +424,12 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
 
       Tchip = ic;
 
-      Tphi = 2.*TMath::Pi()* (0.5+(int)(ic/9)) / NStaves[ChipToLayer(ic)];
+      int staveinlayer = (int)(ic/9);
+      for (int il = 0; il < ChipToLayer(ic); il++){
+	staveinlayer -= NStaves[il];
+      }
+
+      Tphi = 2.*TMath::Pi()* (0.5+staveinlayer) / NStaves[ChipToLayer(ic)];
 
       Tnclus = MAPsize[ic].size();
 
@@ -490,7 +495,13 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
 	staveclusterscolumns.insert(staveclusterscolumns.end(), MAPcols[ic].begin(), MAPcols[ic].end());
 
 	Snchip++;
-	Sphi = 2.*TMath::Pi()* (0.5+(int)(ic/9)) / NStaves[ChipToLayer(ic)];
+
+	int staveinlayer = (int)(ic/9);
+	for (int il = 0; il < ChipToLayer(ic); il++){
+	  staveinlayer -= NStaves[il];
+	}
+
+	Sphi = 2.*TMath::Pi()* (0.5+staveinlayer) / NStaves[ChipToLayer(ic)];
       }
 
       std::sort(staveclustersizes.begin(), staveclustersizes.end(), std::greater<int>());
