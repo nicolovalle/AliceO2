@@ -67,7 +67,8 @@ class ITSZDCAnomalyStudy : public Task
   std::shared_ptr<o2::base::GRPGeomRequest> mGGCCDBRequest;
   std::shared_ptr<DataRequest> mDataRequest;
   bool mUseMC;
-  int mStrobe = 198;
+  int mStrobeFallBack = 594;
+  int mStrobe = mStrobeFallBack;
   size_t mTFn = 0;
   /*
   std::unique_ptr<TH1F> ZNACall;
@@ -262,6 +263,15 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
   auto clusArr = recoData.getITSClusters();
   auto clusPatt = recoData.getITSClustersPatterns();
   LOGP(info, "sizeof ITS RC: {}, {}, {}", clusArr.size(), clusPatt.size(), rofRecVec.size());
+
+  if (rofRecVec.size() == 576 || rofRecVec.size() == 192){
+    mStrobe = 3564/(rofRecVec.size()/32);
+    LOGP(info,"Assuimg TF length = 32 orbits and setting strobe length to {} bc",mStrobe);
+  }
+  else{
+    mStrobe = mStrobeFallBack;
+    LOGP(warning,"Unforeseen number of ROFs in the loop. Using the strobe length fall back value {}",mStrobe);
+  }
 
   std::map<long,std::set<int>> ZDCtag{}; // ZDCtag[orbit] = <list of bc...>
 
