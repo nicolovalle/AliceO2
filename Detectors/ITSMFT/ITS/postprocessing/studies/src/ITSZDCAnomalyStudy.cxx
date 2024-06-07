@@ -91,7 +91,8 @@ class ITSZDCAnomalyStudy : public Task
   int Trofinorbit;
   int TZDCtag;
   int Tclosest_low, Tclosest_up;
-  int Tnhit, Tnclus;
+  int Tnhit, Tnclus, Tnhit_no1pix, Tnclus_no1pix;
+  double Tstdhit, Tstdhit_no1pix;
   int Tnclus_s20, Tnclus_s100, Tnclus_s150;
   int Tnclus_c20, Tnclus_c100, Tnclus_c128;
   double Tnhit1, Tnhit10;
@@ -156,9 +157,13 @@ void ITSZDCAnomalyStudy::init(InitContext& ic)
   ITSChipEvtTree->Branch("closest_low",&Tclosest_low,"closest_low/I");
   ITSChipEvtTree->Branch("closest_up",&Tclosest_up,"closest_up/I");
   ITSChipEvtTree->Branch("nhit",&Tnhit,"nhit/I");
+  ITSChipEvtTree->Branch("nhit_no1pix",&Tnhit_no1pix,"nhit_no1pix/I");
+  ITSChipEvtTree->Branch("stdhit",&Tstdhit,"stdhit/D");
+  ITSChipEvtTree->Branch("stdhit_no1pix",&Tstdhit_no1pix,"stdhit_no1pix/D");
   ITSChipEvtTree->Branch("size1",&Tnhit1,"size1/D");
   ITSChipEvtTree->Branch("size10",&Tnhit10,"size10/D");
   ITSChipEvtTree->Branch("nclus",&Tnclus,"nclus/I");
+  ITSChipEvtTree->Branch("nclus_no1pix",&Tnclus_no1pix,"nclus_no1pix/I");
   ITSChipEvtTree->Branch("nclus_s20",&Tnclus_s20,"nclus_s20/I");
   ITSChipEvtTree->Branch("nclus_s100",&Tnclus_s100,"nclus_s100/I");
   ITSChipEvtTree->Branch("nclus_s150",&Tnclus_s150,"nclus_s150/I");
@@ -444,12 +449,24 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
       Tnhit = Tnclus_s20 = Tnclus_s100 = Tnclus_s150 = 0;
       Tnhit1 = Tnhit10 = 0.;
       Tnclus_c20 = Tnclus_c100 = Tnclus_c128 = 0;
+      Tnhit_no1pix = 0; Tnclus_no1pix = 0;
+
+      int nhit_no1pix = 0;
+      int n2hit = 0, n2hit_no1pix = 0; 
       
       int nclus10 = 0, nclus1 = 0;
       
       for (int nh: MAPsize[ic]){
 
 	Tnhit += nh;
+
+	n2hit += nh*nh;
+
+	if (nh > 1){
+	  Tnhit_no1pix += nh;
+	  Tnclus_no1pix += 1;
+	  n2hit_no1pix += nh*nh;
+	}
 	
 	if (nclus10 < 10){
 	  nclus10++;
@@ -467,6 +484,9 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
       }
 
       Tnhit10 = (nclus10 == 0) ? 0. : 1.*Tnhit10/nclus10;
+      // computing STD as sqrt of E[X^2] - E[X]^2
+      Tstdhit = (Tnclus == 0) ? 0. : TMath::Sqrt( 1.*n2hit/Tnclus - TMath::Power(1.*Tnhit/Tnclus,2));
+      Tstdhit_no1pix = (Tnclus_no1pix == 0) ? 0. : TMath::Sqrt( 1.*n2hit_no1pix/Tnclus_no1pix - TMath::Power(1.*Tnhit_no1pix/Tnclus_no1pix,2));
 
       for (int nc: MAPcols[ic]){
 	Tnclus_c20  += (nc >= 20);
