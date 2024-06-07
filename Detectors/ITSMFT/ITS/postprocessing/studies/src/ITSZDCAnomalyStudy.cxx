@@ -299,6 +299,7 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
 	Counters->Fill(3);
 	ZDCtagBC->Fill(ev.ir.bc);
 	long zdcorbit = (long)ev.ir.orbit;
+	
 
 	if (ZDCtag.find(zdcorbit) != ZDCtag.end()){
 	  bool double_count_bkg = ZDCtag[zdcorbit].insert((int)ev.ir.bc).second;	  
@@ -389,26 +390,20 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
       int npix = 0;
       int colspan = 0;
 
-      // Cluster dictionary ////
-      /*
-      auto pattID = compClus.getPatternID();
-      if (pattID == o2::itsmft::CompCluster::InvalidPatternID || mDict->isGroup(pattID)){
-	o2::itsmft::ClusterPattern patt(pattIt);
-	npix = patt.getNPixels();
-	colspan = patt.getColumnSpan();
-      }
-      else{
-	npix = mDict->getNpixels(pattID);
-	o2::itsmft::ClusterPattern patter = mDict->getPattern(pattID);
-	colspan = patter.getColumnSpan();
-      }
-      */
-      //////////////////
-      // Otherwise:
+    
       auto patti = patternsInRof[iclus];
       npix = patti.getNPixels();
       colspan = patti.getColumnSpan();
-      /////////////////////////////////////////
+   
+
+
+      /* TAGLIO RUMORE 
+
+      if (npix < 2){
+	continue;
+      }
+
+      */
 
 
       
