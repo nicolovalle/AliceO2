@@ -135,12 +135,17 @@ void ITSZDCAnomalyStudy::init(InitContext& ic)
   */
   ZNACall = new TH1F("ZNACall","ZNACall",40,-20,20);
   ZDCtagBC = new TH1F("ZDC tagged BC","ZDC tagged bc",3564,0,3564);
-  Counters = new TH1I("Counters","Counters",5,1,6);
+  Counters = new TH1I("Counters","Counters",10,1,11);
   
   Counters->GetXaxis()->SetBinLabel(1,"TF"); 
   Counters->GetXaxis()->SetBinLabel(2,"ROF"); 
   Counters->GetXaxis()->SetBinLabel(3,"ZDC evt"); 
   Counters->GetXaxis()->SetBinLabel(4,"ROF-ZDC tagged");
+  Counters->GetXaxis()->SetBinLabel(5,"ITSc128 any");
+  Counters->GetXaxis()->SetBinLabel(6,"ITSc128 TO");
+  Counters->GetXaxis()->SetBinLabel(7,"ITSc128 any + ZDC");
+  Counters->GetXaxis()->SetBinLabel(8,"ITSc128 TO + ZDC");
+  
   
   /*
   ITSChipEvtTree.reset(new TTree("evt","evt"));
@@ -381,7 +386,7 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
     std::map<int, std::vector<int>> MAPsize{}; // MAP[chip] = {list if sizes}
     std::map<int, std::vector<int>> MAPcols{}; // MAP[chip] = {list of column span}
 
-
+    
     for (int iclus = 0; iclus < clustersInRof.size(); iclus++){
 
       const auto& compClus = clustersInRof[iclus];
@@ -399,19 +404,6 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
       auto patti = patternsInRof[iclus];
       npix = patti.getNPixels();
       colspan = patti.getColumnSpan();
-   
-
-
-      /* TAGLIO RUMORE 
-
-      if (npix < 2){
-	continue;
-      }
-
-      */
-
-
-      
 	
       
      
@@ -429,6 +421,9 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
       
  
     } // end of loop over clusters in rof
+
+    bool CounterITStag = false;
+    bool CounterITStagTO = false;
 
     for (int ic : AvailableChips){
 
@@ -494,9 +489,21 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
 	Tnclus_c128 += (nc >= 128);	
       }
 
+      // counting events based on arbitrary definition of ITS-tagged
+      if (!CounterITStag && Tnclus_c128 > 0){
+	Counters->Fill(5);
+	if (TZDCtag > 0) Counters->Fill(7);
+	CounterITStag = true;
+      }
+      if (!CounterITStagTO && Tnclus_c128 > 0 && Tphi < 3.15 && Tphi > 3.14/2){
+	Counters->Fill(6);
+	if (TZDCtag > 0) Counters->Fill(8);
+	CounterITStagTO = true;
+      }
 
       // filling the Event Tree
       ITSChipEvtTree->Fill();
+	
 
     } // end of loop over available chips
 
