@@ -23,6 +23,7 @@
 #include <set>
 
 #include <TTree.h>
+#include <TH2.h>
 
 // ZDC
 #include "DataFormatsZDC/RecEventFlat.h"
@@ -59,6 +60,7 @@ class ITSZDCAnomalyStudy : public Task
   std::vector<o2::itsmft::ClusterPattern> mPatterns;
 
   int ChipToLayer(int chip);
+  double ChipToPhi(int chip);
 
   int NStaves[7] = {12, 16, 20, 24, 30, 42, 48};
   int bcdistance(long orb1, int bc1, long orb2, int bc2);
@@ -79,6 +81,8 @@ class ITSZDCAnomalyStudy : public Task
   TH1F* ZNACall;
   TH1F* ZDCtagBC;
   TH1I* Counters;
+  TH2D* ClusterShape;
+  TH2D* ClusterShapeTO;
   TTree* ITSChipEvtTree;
   TTree* ITSStaveEvtTree;
   const o2::itsmft::TopologyDictionary *mDict = nullptr;
@@ -95,6 +99,7 @@ class ITSZDCAnomalyStudy : public Task
   double Tstdhit, Tstdhit_no1pix;
   int Tnclus_s20, Tnclus_s100, Tnclus_s150;
   int Tnclus_c20, Tnclus_c100, Tnclus_c128;
+  int Tnclus_target;
   double Tnhit1, Tnhit10;
 
   // Stave tree variables
@@ -136,15 +141,17 @@ void ITSZDCAnomalyStudy::init(InitContext& ic)
   ZNACall = new TH1F("ZNACall","ZNACall",40,-20,20);
   ZDCtagBC = new TH1F("ZDC tagged BC","ZDC tagged bc",3564,0,3564);
   Counters = new TH1I("Counters","Counters",10,1,11);
+  ClusterShape = new TH2D("ClusterShape","Col and Row span of cluster npix > 1; colspan; rowspan",130,0,130,130,0,130);
+  ClusterShapeTO = new TH2D("ClusterShapeTO","Col and Row span of cluster in IB-TO, npix > 1; colspan; rowspan",130,0,130,130,0,130);
   
   Counters->GetXaxis()->SetBinLabel(1,"TF"); 
   Counters->GetXaxis()->SetBinLabel(2,"ROF"); 
   Counters->GetXaxis()->SetBinLabel(3,"ZDC evt"); 
   Counters->GetXaxis()->SetBinLabel(4,"ROF-ZDC tagged");
-  Counters->GetXaxis()->SetBinLabel(5,"ITSc128 any");
-  Counters->GetXaxis()->SetBinLabel(6,"ITSc128 TO");
-  Counters->GetXaxis()->SetBinLabel(7,"ITSc128 any + ZDC");
-  Counters->GetXaxis()->SetBinLabel(8,"ITSc128 TO + ZDC");
+  Counters->GetXaxis()->SetBinLabel(5,"ITStag any");
+  Counters->GetXaxis()->SetBinLabel(6,"ITStag TO");
+  Counters->GetXaxis()->SetBinLabel(7,"ITStag any + ZDC");
+  Counters->GetXaxis()->SetBinLabel(8,"ITStag TO + ZDC");
   
   
   /*
@@ -173,8 +180,9 @@ void ITSZDCAnomalyStudy::init(InitContext& ic)
   ITSChipEvtTree->Branch("nclus_s100",&Tnclus_s100,"nclus_s100/I");
   ITSChipEvtTree->Branch("nclus_s150",&Tnclus_s150,"nclus_s150/I");
   ITSChipEvtTree->Branch("nclus_c20",&Tnclus_c20,"nclus_c20/I");
-  ITSChipEvtTree->Branch("nclus_c100",&Tnclus_c100,"nclus_c100/I");
+  //ITSChipEvtTree->Branch("nclus_c100",&Tnclus_c100,"nclus_c100/I");
   ITSChipEvtTree->Branch("nclus_c128",&Tnclus_c128,"nclus_c128/I");
+  ITSChipEvtTree->Branch("nclus_target",&Tnclus_target,"nclus_target/I");
 
   ITSStaveEvtTree->Branch("orbit",&Torbit,"orbit/L");
   ITSStaveEvtTree->Branch("bc",&Tbc,"bc/I");
@@ -192,7 +200,7 @@ void ITSZDCAnomalyStudy::init(InitContext& ic)
   ITSStaveEvtTree->Branch("nclus_s100",&Snclus_s100,"nclus_s100/I");
   ITSStaveEvtTree->Branch("nclus_s150",&Snclus_s150,"nclus_s150/I");
   ITSStaveEvtTree->Branch("nclus_c20",&Snclus_c20,"nclus_c20/I");
-  ITSStaveEvtTree->Branch("nclus_c100",&Snclus_c100,"nclus_c100/I");
+  //ITSStaveEvtTree->Branch("nclus_c100",&Snclus_c100,"nclus_c100/I");
   ITSStaveEvtTree->Branch("nclus_c128",&Snclus_c128,"nclus_c128/I");
   
   
@@ -210,6 +218,8 @@ void ITSZDCAnomalyStudy::endOfStream(EndOfStreamContext&)
   ZNACall->Write();
   ZDCtagBC->Write();
   Counters->Write();
+  ClusterShape->Write();
+  ClusterShapeTO->Write();
   ITSChipEvtTree->Write();
   F1->Close();
   LOGP(info, "Writing {}", outfile2);
@@ -217,6 +227,8 @@ void ITSZDCAnomalyStudy::endOfStream(EndOfStreamContext&)
   ZNACall->Write();
   ZDCtagBC->Write();
   Counters->Write();
+  ClusterShape->Write();
+  ClusterShapeTO->Write();
   ITSStaveEvtTree->Write();
   F2->Close();
   delete ZNACall;
@@ -385,6 +397,7 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
     std::vector<std::set<int>> AvailableChipsInStave(12+16+20,std::set<int>{});
     std::map<int, std::vector<int>> MAPsize{}; // MAP[chip] = {list if sizes}
     std::map<int, std::vector<int>> MAPcols{}; // MAP[chip] = {list of column span}
+    std::map<int, int> MAPntarget{}; // MAP[chip] = number of bad clusters in chip 
 
     
     for (int iclus = 0; iclus < clustersInRof.size(); iclus++){
@@ -399,23 +412,31 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
 
       int npix = 0;
       int colspan = 0;
+      int rowspan = 0;
 
     
       auto patti = patternsInRof[iclus];
       npix = patti.getNPixels();
       colspan = patti.getColumnSpan();
+      rowspan = patti.getRowSpan();
+
+      if (npix>1){
+	ClusterShape->Fill(colspan,rowspan);
+	double pphi = ChipToPhi((int)chipid);
+	if (pphi < 3.15 && pphi > 3.14/2) ClusterShapeTO->Fill(colspan,rowspan);
+      }
 	
       
-     
-
       bool newchip = AvailableChips.insert(chipid).second;
       if (newchip) {
 	MAPsize[chipid] = std::vector<int>{};
 	MAPcols[chipid] = std::vector<int>{};
+	MAPntarget[chipid] = 0;
       }
 
       MAPsize[chipid].push_back(npix);
       MAPcols[chipid].push_back(colspan);
+      if (colspan > 127 && rowspan < 60) MAPntarget[chipid] += 1;
 
       AvailableChipsInStave[(int)(chipid/9)].insert(chipid);
       
@@ -429,12 +450,7 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
 
       Tchip = ic;
 
-      int staveinlayer = (int)(ic/9);
-      for (int il = 0; il < ChipToLayer(ic); il++){
-	staveinlayer -= NStaves[il];
-      }
-
-      Tphi = 2.*TMath::Pi()* (0.5+staveinlayer) / NStaves[ChipToLayer(ic)];
+      Tphi = ChipToPhi(ic);
 
       Tnclus = MAPsize[ic].size();
 
@@ -444,6 +460,7 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
       Tnhit = Tnclus_s20 = Tnclus_s100 = Tnclus_s150 = 0;
       Tnhit1 = Tnhit10 = 0.;
       Tnclus_c20 = Tnclus_c100 = Tnclus_c128 = 0;
+      Tnclus_target = MAPntarget[ic];
       Tnhit_no1pix = 0; Tnclus_no1pix = 0;
 
       int nhit_no1pix = 0;
@@ -490,12 +507,12 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
       }
 
       // counting events based on arbitrary definition of ITS-tagged
-      if (!CounterITStag && Tnclus_c128 > 0){
+      if (!CounterITStag && Tnclus_target > 0){
 	Counters->Fill(5);
 	if (TZDCtag > 0) Counters->Fill(7);
 	CounterITStag = true;
       }
-      if (!CounterITStagTO && Tnclus_c128 > 0 && Tphi < 3.15 && Tphi > 3.14/2){
+      if (!CounterITStagTO && Tnclus_target > 0 && Tphi < 3.15 && Tphi > 3.14/2){
 	Counters->Fill(6);
 	if (TZDCtag > 0) Counters->Fill(8);
 	CounterITStagTO = true;
@@ -528,12 +545,7 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
 
 	Snchip++;
 
-	int staveinlayer = (int)(ic/9);
-	for (int il = 0; il < ChipToLayer(ic); il++){
-	  staveinlayer -= NStaves[il];
-	}
-
-	Sphi = 2.*TMath::Pi()* (0.5+staveinlayer) / NStaves[ChipToLayer(ic)];
+	Sphi = ChipToPhi(ic);
       }
 
       std::sort(staveclustersizes.begin(), staveclustersizes.end(), std::greater<int>());
@@ -618,6 +630,17 @@ int ITSZDCAnomalyStudy::ChipToLayer(int chip){
   if (chip < 14712)
     return 5;
   return 6;
+}
+
+
+double ITSZDCAnomalyStudy::ChipToPhi(int chip){
+   
+  int staveinlayer = (int)(chip/9);
+    for (int il = 0; il < ChipToLayer(chip); il++){
+      staveinlayer -= NStaves[il];
+    }
+
+    return 2.*TMath::Pi()* (0.5+staveinlayer) / NStaves[ChipToLayer(chip)];
 }
   
 int ITSZDCAnomalyStudy::bcdistance(long orb1, int bc1, long orb2, int bc2){ // returns "2" - "1"
