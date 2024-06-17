@@ -436,7 +436,7 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
 
       MAPsize[chipid].push_back(npix);
       MAPcols[chipid].push_back(colspan);
-      if (colspan > 127 && rowspan < 60) MAPntarget[chipid] += 1;
+      if (colspan > 127 && rowspan < 30) MAPntarget[chipid] += 1;
 
       AvailableChipsInStave[(int)(chipid/9)].insert(chipid);
       
