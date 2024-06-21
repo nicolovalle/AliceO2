@@ -47,7 +47,6 @@ void ITSMFTDeadMapBuilder::init(InitContext& ic)
   LOG(info) << "ITSMFTDeadMapBuilder init... " << mSelfName;
 
   mTFSampling = ic.options().get<int>("tf-sampling");
-  mSamplingMode = ic.options().get<std::string>("sampling-mode");
   mTFLength = ic.options().get<int>("tf-length");
   mDoLocalOutput = ic.options().get<bool>("local-output");
   mObjectName = ic.options().get<std::string>("outfile");
@@ -151,12 +150,9 @@ void ITSMFTDeadMapBuilder::run(ProcessingContext& pc)
     mFirstOrbitRun = mFirstOrbitTF;
   }
 
-  long sampled_orbit = mFirstOrbitTF;
-  if (mSamplingMode == "first-orbit-run") {
-    sampled_orbit = sampled_orbit - mFirstOrbitRun;
-  }
+  long sampled_orbit = mFirstOrbitTF - mFirstOrbitRun;
 
-  if ((sampled_orbit / mTFLength) % mTFSampling != 0) {
+  if (((sampled_orbit / mTFLength) % mTFSampling != 0) && ((sampled_orbit - mMaxSampledOrbit) < mTFSampling * mTFLength)) {
     return;
   }
 
@@ -238,6 +234,8 @@ void ITSMFTDeadMapBuilder::run(ProcessingContext& pc)
   // filling the map
   mMapObject.fillMap(mFirstOrbitTF, mDeadMapTF);
 
+  mMaxSampledOrbit = (sampled_orbit > mMaxSampledOrbit) ? sampled_orbit : mMaxSampledOrbit;
+
   end = std::chrono::high_resolution_clock::now();
   int difference = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 
@@ -270,7 +268,7 @@ void ITSMFTDeadMapBuilder::PrepareOutputCcdb(EndOfStreamContext* ec, std::string
   if (ec != nullptr) {
 
     LOG(important) << "Sending object " << info.getPath() << "/" << info.getFileName()
-                   << "to ccdb-populator, of size " << image->size() << " bytes, valid for "
+                   << " to ccdb-populator, of size " << image->size() << " bytes, valid for "
                    << info.getStartValidityTimestamp() << " : " << info.getEndValidityTimestamp();
 
     if (mRunMFT) {
@@ -284,7 +282,7 @@ void ITSMFTDeadMapBuilder::PrepareOutputCcdb(EndOfStreamContext* ec, std::string
 
   else if (!ccdburl.empty()) { // send from this workflow
 
-    LOG(important) << mSelfName << " sending object " << ccdburl << "/browse/" << info.getPath() << "/" << info.getFileName()
+    LOG(important) << mSelfName << "sending object " << ccdburl << "/browse/" << info.getPath() << "/" << info.getFileName()
                    << " of size " << image->size() << " bytes, valid for "
                    << info.getStartValidityTimestamp() << " : " << info.getEndValidityTimestamp();
 
@@ -378,8 +376,7 @@ DataProcessorSpec getITSMFTDeadMapBuilderSpec(std::string datasource, bool doMFT
     inputs,
     outputs,
     AlgorithmSpec{adaptFromTask<ITSMFTDeadMapBuilder>(datasource, doMFT)},
-    Options{{"tf-sampling", VariantType::Int, 350, {"Process every Nth TF. Selection according to first TF orbit."}},
-            {"sampling-mode", VariantType::String, "first-orbit-run", {"Use absolute orbit value or offset from first processed orbit."}},
+    Options{{"tf-sampling", VariantType::Int, 1000, {"Process every Nth TF. Selection according to first TF orbit."}},
             {"tf-length", VariantType::Int, 32, {"Orbits per TF."}},
             {"skip-static-map", VariantType::Bool, false, {"Do not fill static part of the map."}},
             {"ccdb-url", VariantType::String, "", {"CCDB url. Ignored if endOfStream is processed."}},

@@ -73,7 +73,7 @@ class TimeDeadMap
     }
   }
 
-  void decodeMap(unsigned long orbit, o2::itsmft::NoiseMap& noisemap, bool includeStaticMap = true, long orbitGapAllowed = 330000)
+  void decodeMap(unsigned long orbit, o2::itsmft::NoiseMap& noisemap, bool includeStaticMap = true, long orbitGapAllowed = 170000)
   { // for time-dependent and (optionally) static part. Use orbitGapAllowed = -1 to ignore check on orbit difference
 
     if (mMAP_VERSION != "3" && mMAP_VERSION != "4") {
@@ -132,7 +132,7 @@ class TimeDeadMap
       LOG(warning) << "Requested orbit " << orbit << "from an empty time-dependent map. Doing nothing";
       return (long)orbit;
     }
-    auto closest = mEvolvingDeadMap.upper_bound(orbit);
+    auto closest = mEvolvingDeadMap.lower_bound(orbit);
     if (closest != mEvolvingDeadMap.begin()) {
       --closest;
       mmap = closest->second;
