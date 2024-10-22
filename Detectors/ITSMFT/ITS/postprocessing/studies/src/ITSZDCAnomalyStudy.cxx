@@ -21,6 +21,7 @@
 #include "DataFormatsITSMFT/TopologyDictionary.h"
 
 #include <set>
+#include <algorithm>
 
 #include <TTree.h>
 #include <TH2.h>
@@ -63,13 +64,16 @@ class ITSZDCAnomalyStudy : public Task
   double ChipToPhi(int chip);
 
   int NStaves[7] = {12, 16, 20, 24, 30, 42, 48};
+  int N_CHIP_IB = 9*(NStaves[0]+NStaves[1]+NStaves[2]);
   int bcdistance(long orb1, int bc1, long orb2, int bc2);
+  std::pair<long,int> shiftbc(long orb, int bc, int shift);
   std::pair<int,int> findclosestbkg(long orb, int bc, std::map<long,std::set<int>> ZDC);
   
   std::shared_ptr<o2::base::GRPGeomRequest> mGGCCDBRequest;
   std::shared_ptr<DataRequest> mDataRequest;
   bool mUseMC;
   int mStrobeFallBack = 594;
+  std::pair<double, double> TimeWindowZDC = std::make_pair(5.,11.);
   int mStrobe = mStrobeFallBack;
   size_t mTFn = 0;
   /*
@@ -78,13 +82,17 @@ class ITSZDCAnomalyStudy : public Task
   std::unique_ptr<TH1I> Counters;
   std::unique_ptr<TTree> ITSChipEvtTree;
   */
+  TH1F* TimeWindowCut;
   TH1F* ZNACall;
-  TH1F* ZDCtagBC;
+  TH1F* ZNCCall;
+  TH1F* ZDCAtagBC;
+  TH1F* ZDCCtagBC;
   TH1I* Counters;
   TH2D* ClusterShape;
   TH2D* ClusterShapeTO;
   TTree* ITSChipEvtTree;
   TTree* ITSStaveEvtTree;
+  TTree* ITSROFEvtTree;
   const o2::itsmft::TopologyDictionary *mDict = nullptr;
 
   // Tree variables
@@ -101,6 +109,7 @@ class ITSZDCAnomalyStudy : public Task
   int Tnclus_c20, Tnclus_c100, Tnclus_c128;
   int Tnclus_target;
   double Tnhit1, Tnhit10;
+  int Tmissingafter, Tmissingafter2;
 
   // Stave tree variables
   int Sstave;
@@ -110,6 +119,11 @@ class ITSZDCAnomalyStudy : public Task
   int Snclus_s20, Snclus_s100, Snclus_s150;
   int Snclus_c20, Snclus_c100, Snclus_c128;
   double Snhit1, Snhit10;
+
+  // ROF tree variables
+  int Ritstag, RitstagTO;
+  int Rnchip, RnchipTO;
+  int RnchipafterTO;
   
 };
 
@@ -138,20 +152,27 @@ void ITSZDCAnomalyStudy::init(InitContext& ic)
   ZDCtagBC.reset(new TH1F("ZDC tagged BC","ZDC tagged bc",3564,0,3564));
   Counters.reset(new TH1I("Counters","Counters",5,1,6));
   */
+  TimeWindowCut = new TH1F("ZDC bkg region","ZDC bkg region",2,0,2);
+  TimeWindowCut->SetBinContent(1,TimeWindowZDC.first);
+  TimeWindowCut->SetBinContent(2,TimeWindowZDC.second);
   ZNACall = new TH1F("ZNACall","ZNACall",40,-20,20);
-  ZDCtagBC = new TH1F("ZDC tagged BC","ZDC tagged bc",3564,0,3564);
-  Counters = new TH1I("Counters","Counters",10,1,11);
+  ZNCCall = new TH1F("ZNCCall","ZNCCall",40,-20,20);
+  ZDCAtagBC = new TH1F("ZDCA tagged BC","ZDCA tagged bc",3564,0,3564);
+  ZDCCtagBC = new TH1F("ZDCC tagged BC","ZDCC tagged bc",3564,0,3564);
+  Counters = new TH1I("Counters","Counters",20,1,21);
   ClusterShape = new TH2D("ClusterShape","Col and Row span of cluster npix > 1; colspan; rowspan",130,0,130,130,0,130);
   ClusterShapeTO = new TH2D("ClusterShapeTO","Col and Row span of cluster in IB-TO, npix > 1; colspan; rowspan",130,0,130,130,0,130);
   
   Counters->GetXaxis()->SetBinLabel(1,"TF"); 
   Counters->GetXaxis()->SetBinLabel(2,"ROF"); 
-  Counters->GetXaxis()->SetBinLabel(3,"ZDC evt"); 
-  Counters->GetXaxis()->SetBinLabel(4,"ROF-ZDC tagged");
+  Counters->GetXaxis()->SetBinLabel(3,"ZDCA evt"); 
+  Counters->GetXaxis()->SetBinLabel(4,"ROF-ZDCA tagged");
   Counters->GetXaxis()->SetBinLabel(5,"ITStag any");
   Counters->GetXaxis()->SetBinLabel(6,"ITStag TO");
   Counters->GetXaxis()->SetBinLabel(7,"ITStag any + ZDC");
   Counters->GetXaxis()->SetBinLabel(8,"ITStag TO + ZDC");
+  Counters->GetXaxis()->SetBinLabel(9,"ZDCC evt"); 
+  Counters->GetXaxis()->SetBinLabel(10,"ROF-ZDCC tagged");
   
   
   /*
@@ -159,6 +180,7 @@ void ITSZDCAnomalyStudy::init(InitContext& ic)
   */
   ITSChipEvtTree = new TTree("chipevt","chipevt");
   ITSStaveEvtTree = new TTree("staveevt","staveevt");
+  ITSROFEvtTree = new TTree("rofevt","rofevt");
 
   ITSChipEvtTree->Branch("orbit",&Torbit,"orbit/L");
   ITSChipEvtTree->Branch("bc",&Tbc,"bc/I");
@@ -183,6 +205,8 @@ void ITSZDCAnomalyStudy::init(InitContext& ic)
   //ITSChipEvtTree->Branch("nclus_c100",&Tnclus_c100,"nclus_c100/I");
   ITSChipEvtTree->Branch("nclus_c128",&Tnclus_c128,"nclus_c128/I");
   ITSChipEvtTree->Branch("nclus_target",&Tnclus_target,"nclus_target/I");
+  ITSChipEvtTree->Branch("missingafter",&Tmissingafter,"missingafter/I");
+  ITSChipEvtTree->Branch("missingafter2",&Tmissingafter2,"missingafter2/I");
 
   ITSStaveEvtTree->Branch("orbit",&Torbit,"orbit/L");
   ITSStaveEvtTree->Branch("bc",&Tbc,"bc/I");
@@ -202,6 +226,18 @@ void ITSZDCAnomalyStudy::init(InitContext& ic)
   ITSStaveEvtTree->Branch("nclus_c20",&Snclus_c20,"nclus_c20/I");
   //ITSStaveEvtTree->Branch("nclus_c100",&Snclus_c100,"nclus_c100/I");
   ITSStaveEvtTree->Branch("nclus_c128",&Snclus_c128,"nclus_c128/I");
+
+  ITSROFEvtTree->Branch("orbit",&Torbit,"orbit/L");
+  ITSROFEvtTree->Branch("bc",&Tbc,"bc/I");
+  ITSROFEvtTree->Branch("zdctag",&TZDCtag,"zdctag/I");
+  ITSROFEvtTree->Branch("closest_low",&Tclosest_low,"closest_low/I");
+  ITSROFEvtTree->Branch("closest_up",&Tclosest_up,"closest_up/I");
+  ITSROFEvtTree->Branch("itstag",&Ritstag,"itstag/I");
+  ITSROFEvtTree->Branch("itstagTO",&RitstagTO,"itstagTO/I");
+  ITSROFEvtTree->Branch("nchip",&Rnchip,"nchip/I");
+  ITSROFEvtTree->Branch("nchipTO",&RnchipTO,"nchipTO/I");
+  ITSROFEvtTree->Branch("nchipafterTO",&RnchipafterTO,"nchipafterTO/I");
+  
   
   
 }
@@ -215,26 +251,38 @@ void ITSZDCAnomalyStudy::endOfStream(EndOfStreamContext&)
   std::string outfile2 = "output2.root";
   LOGP(info, "Writing {}", outfile1);
   TFile *F1 = TFile::Open(outfile1.c_str(),"recreate");
+  TimeWindowCut->Write();
   ZNACall->Write();
-  ZDCtagBC->Write();
+  ZNCCall->Write();
+  ZDCAtagBC->Write();
+  ZDCCtagBC->Write();
   Counters->Write();
   ClusterShape->Write();
   ClusterShapeTO->Write();
   ITSChipEvtTree->Write();
+  ITSROFEvtTree->Write();
   F1->Close();
   LOGP(info, "Writing {}", outfile2);
   TFile *F2 = TFile::Open(outfile2.c_str(),"recreate");
+  TimeWindowCut->Write();
   ZNACall->Write();
-  ZDCtagBC->Write();
+  ZNCCall->Write();
+  ZDCAtagBC->Write();
+  ZDCCtagBC->Write();
   Counters->Write();
   ClusterShape->Write();
   ClusterShapeTO->Write();
   ITSStaveEvtTree->Write();
   F2->Close();
+  delete TimeWindowCut;
   delete ZNACall;
-  delete ZDCtagBC;
+  delete ZNCCall;
+  delete ZDCAtagBC;
+  delete ZDCCtagBC;
   delete Counters;
   delete ITSChipEvtTree;
+  delete ITSStaveEvtTree;
+  delete ITSROFEvtTree;
 
 }
 
@@ -295,71 +343,114 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
     LOGP(warning,"Unforeseen number of ROFs in the loop. Using the strobe length fall back value {}",mStrobe);
   }
 
-  std::map<long,std::set<int>> ZDCtag{}; // ZDCtag[orbit] = <list of bc...>
+  std::map<long,std::set<int>> ZDCAtag{}; // ZDCAtag[orbit] = <list of bc...>
+  std::map<long,std::set<int>> ZDCCtag{};
 
   // ________________________________________________________________
   // FILLING ZDC ARRAY
   o2::zdc::RecEventFlat ev;
   ev.init(RecBC, Energy, TDCData, Info2);
 
-  int bkgcounter = 0;
+  int bkgcounterA = 0, bkgcounterC = 0;
   while (ev.next()) {
     
-    int32_t itdc = o2::zdc::TDCZNAC; // should be == 0
-    
-    int nhit = ev.NtdcV(itdc);
-    
-    for (int32_t ipos = 0; ipos < nhit; ipos++) {
-      double mytdc = o2::zdc::FTDCVal * ev.TDCVal[itdc][ipos];
+    int32_t itdcA = o2::zdc::TDCZNAC; // should be == 0
+    int32_t itdcC = o2::zdc::TDCZNCC;
+
+    // ZDC - A side
+    int nhitA = ev.NtdcV(itdcA);
+    for (int32_t ipos = 0; ipos < nhitA; ipos++) {
+      
+      double mytdc = o2::zdc::FTDCVal * ev.TDCVal[itdcA][ipos];
       
       ZNACall->Fill(mytdc);
       
-      if (itdc == o2::zdc::TDCZNAC && mytdc > 5.7 && mytdc < 8.7) {
+      if (mytdc >= TimeWindowZDC.first && mytdc <= TimeWindowZDC.second ) {  // original from Pietro: [5.7 - 8.7]
 
 	// Backgroud event found here!
-	bkgcounter++;
+	bkgcounterA++;
 	Counters->Fill(3);
-	ZDCtagBC->Fill(ev.ir.bc);
+	ZDCAtagBC->Fill(ev.ir.bc);
 	long zdcorbit = (long)ev.ir.orbit;
+
+	//string isFromPietro = (mytdc > 5.7 && mytdc < 8.7) ? "Pietro" : "";
+ 	//LOGP(info,"ZDCA bkg {}.{} ({})",ev.ir.orbit,ev.ir.bc,isFromPietro);
 	
 
-	if (ZDCtag.find(zdcorbit) != ZDCtag.end()){
-	  bool double_count_bkg = ZDCtag[zdcorbit].insert((int)ev.ir.bc).second;	  
+	if (ZDCAtag.find(zdcorbit) != ZDCAtag.end()){
+	  bool double_count_bkg = ZDCAtag[zdcorbit].insert((int)ev.ir.bc).second;	  
 	  if (double_count_bkg){
-	    LOGP(warning,"Multiple ZDC counts in the same orbit/bc {}/{}",zdcorbit,ev.ir.bc);
+	    LOGP(warning,"Multiple ZDCA counts in the same orbit/bc {}/{}",zdcorbit,ev.ir.bc);
 	  }
 	}
 	else {
 	  std::set<int> zdcbcs{(int)ev.ir.bc};
-	  ZDCtag[zdcorbit] = zdcbcs;
+	  ZDCAtag[zdcorbit] = zdcbcs;
 	}
 	
       }
     }
+
+    // ZDC - C side
+    int nhitC = ev.NtdcV(itdcC);
+    for (int32_t ipos = 0; ipos < nhitC; ipos++) {
+      
+      double mytdc = o2::zdc::FTDCVal * ev.TDCVal[itdcC][ipos];
+      
+      ZNCCall->Fill(mytdc);
+      
+      if (mytdc >= TimeWindowZDC.first && mytdc <= TimeWindowZDC.second ) {
+
+	// Backgroud event found here!
+	bkgcounterC++;
+	Counters->Fill(9); 
+	ZDCCtagBC->Fill(ev.ir.bc);
+	long zdcorbit = (long)ev.ir.orbit;
+	
+
+	if (ZDCCtag.find(zdcorbit) != ZDCCtag.end()){
+	  bool double_count_bkg = ZDCCtag[zdcorbit].insert((int)ev.ir.bc).second;	  
+	  if (double_count_bkg){
+	    LOGP(warning,"Multiple ZDCC counts in the same orbit/bc {}/{}",zdcorbit,ev.ir.bc);
+	  }
+	}
+	else {
+	  std::set<int> zdcbcs{(int)ev.ir.bc};
+	  ZDCCtag[zdcorbit] = zdcbcs;
+	}
+	
+      }
+      
+    }
+    
   } // end of while ev.next()
 
-  LOGP(info,"Found {} background envents from ZNAC",bkgcounter++);
+  LOGP(info,"Found {}/{} background envents from ZNAC/ZNCC",bkgcounterA,bkgcounterC);
   //__________________________________________________________________
 
-
-
-  std::map<long,bool> ChipSeen{}; // ChipSeen[orbit*3546 + bc] = true/false
-  /*
-  for (auto& rofRec : rofRecVec){
-    int l1bc = (int)rofRec.getBCData().bc;
-    long l1orbit = (long)rofRec.getBCData().orbit;
-    auto cl
-  */
 
   
   getClusterPatterns(clusArr, clusPatt, *mDict);
   //auto pattIt = clusPatt.begin();
 
-  bool printFirstOrbit = false;
+  int inTFROFcounter = -1;
+
+  std::vector<bool> ChipSeenInThisROF(N_CHIP_IB,false); // ChipSeenInThisROF[chipid] = true/false
+  std::vector<bool> ChipSeenInLastROF(N_CHIP_IB,false); // ChipSeenInLastROF[chipid] = true/false
+  std::vector<bool> ChipSeenInLast2ROF(N_CHIP_IB,false); // ChipSeenInLast2ROF[chipid] = true/false
   
-  for (auto& rofRec : rofRecVec){  // size: ROFs in TF
+  //for (auto& rofRec : rofRecVec){  // size: ROFs in TF
+  for (auto it = rofRecVec.rbegin(); it != rofRecVec.rend(); ++it){
+
+    auto& rofRec = *it;
+
+    inTFROFcounter++;
 
     Counters->Fill(2);
+
+    ChipSeenInLast2ROF = ChipSeenInLastROF;
+    ChipSeenInLastROF = ChipSeenInThisROF;
+    std::fill(ChipSeenInThisROF.begin(), ChipSeenInThisROF.end(), false);
 
     auto clustersInRof = rofRec.getROFData(clusArr);
     auto patternsInRof = rofRec.getROFData(mPatterns); 
@@ -367,30 +458,44 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
     Tbc = (int)rofRec.getBCData().bc;
     Torbit = (long)rofRec.getBCData().orbit;
 
-    if (!printFirstOrbit){
+    if (inTFROFcounter < 1){
       LOGP(info,"First of TF: ITS orbit/bc {}/{}",Torbit,Tbc);
-      printFirstOrbit = true;
     }
 
-    Trofinorbit = (int)Tbc/mStrobe;
+    Trofinorbit = (int)(Tbc/mStrobe);
 
     TZDCtag = 0;
-    if (ZDCtag.find((long)Torbit) != ZDCtag.end()){
-      for (auto zbc : ZDCtag[(long)Torbit]){
+
+    bool isZDCAtagged = false;
+    if (ZDCAtag.find((long)Torbit) != ZDCAtag.end()){
+      for (auto zbc : ZDCAtag[(long)Torbit]){
 	if ((int)(zbc/mStrobe) == Trofinorbit){
-	  TZDCtag = 1;
+	  isZDCAtagged = true;
 	  Counters->Fill(4);
 	  break;
 	}
       }
     }
 
-    std::pair<int,int> closestbkg = findclosestbkg(Torbit, Tbc, ZDCtag);
+    bool isZDCCtagged = false;
+    if (ZDCCtag.find((long)Torbit) != ZDCCtag.end()){
+      for (auto zbc : ZDCCtag[(long)Torbit]){
+	if ((int)(zbc/mStrobe) == Trofinorbit){
+	  isZDCCtagged = true;
+	  Counters->Fill(10);
+	  break;
+	}
+      }
+    }
+
+    TZDCtag = 1*isZDCAtagged + 2*isZDCCtagged; // 0: no tag;  1: ZDC-A tagged;  2: ZDC-C tagged;   3: ZDC-A AND ZDC-C tagged
+
+    std::pair<int,int> closestbkg = findclosestbkg(Torbit, Tbc, ZDCAtag);
 
     Tclosest_low = closestbkg.first;
     Tclosest_up = closestbkg.second;
 
-    if (TZDCtag > 0) LOGP(info,"Closest bkg: asking {}/{}, returning {} , {}. ZDCTag {}",Torbit,Tbc,Tclosest_low,Tclosest_up,TZDCtag);
+    if (TZDCtag > 0) LOGP(info,"ZDCTag {}. Closest A-side bkg: asking {}/{}, returning (low,up) = ({},{})",TZDCtag,Torbit,Tbc,Tclosest_low,Tclosest_up);
     //else LOGP(info,"DEBUGcl bkg: asking {}/{}, returning {} , {}. ZDCTag {}",Torbit,Tbc,Tclosest_low,Tclosest_up,TZDCtag);
 
     std::set<int> AvailableChips{};
@@ -409,6 +514,8 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
       if (ChipToLayer(chipid) > 2){
 	continue;
       }
+
+      ChipSeenInThisROF[chipid] = true;
 
       int npix = 0;
       int colspan = 0;
@@ -443,14 +550,35 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
  
     } // end of loop over clusters in rof
 
-    bool CounterITStag = false;
-    bool CounterITStagTO = false;
+    Ritstag = 0;
+    RitstagTO = 0;
+    Rnchip = RnchipTO = 0;
+    RnchipafterTO = 0;
+    if (inTFROFcounter > 0){
+      for (int ic=0; ic<N_CHIP_IB; ic++){
+	RnchipafterTO += (int)(ChipSeenInLastROF[ic] && ChipToPhi(ic) < 3.15 && ChipToPhi(ic) > 3.14/2);
+      }
+    }
+    else{
+      RnchipafterTO = -1;
+    }
 
     for (int ic : AvailableChips){
 
+      Rnchip++;
       Tchip = ic;
 
+      if (inTFROFcounter < 1) Tmissingafter = -1;
+      else if (ChipSeenInLastROF[ic]) Tmissingafter = 0;
+      else Tmissingafter = 1;
+
+      if (inTFROFcounter < 2) Tmissingafter2 = -1;
+      else if (ChipSeenInLast2ROF[ic]) Tmissingafter2 = 0;
+      else Tmissingafter2 = 1;
+
       Tphi = ChipToPhi(ic);
+
+      if (Tphi < 3.15 && Tphi > 3.14/2) RnchipTO++;
 
       Tnclus = MAPsize[ic].size();
 
@@ -507,15 +635,15 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
       }
 
       // counting events based on arbitrary definition of ITS-tagged
-      if (!CounterITStag && Tnclus_target > 0){
+      if (Ritstag == 0 && Tnclus_target > 0){
 	Counters->Fill(5);
 	if (TZDCtag > 0) Counters->Fill(7);
-	CounterITStag = true;
+	Ritstag = 1;
       }
-      if (!CounterITStagTO && Tnclus_target > 0 && Tphi < 3.15 && Tphi > 3.14/2){
+      if (RitstagTO == 0 && Tnclus_target > 0 && Tphi < 3.15 && Tphi > 3.14/2){
 	Counters->Fill(6);
 	if (TZDCtag > 0) Counters->Fill(8);
-	CounterITStagTO = true;
+	RitstagTO = 1;
       }
 
       // filling the Event Tree
@@ -590,7 +718,8 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
 
     } // end of loop over staves
 
-     
+    ITSROFEvtTree->Fill();
+  
   } // end of loop over ROFs
   
   
@@ -607,10 +736,17 @@ void ITSZDCAnomalyStudy::process(o2::globaltracking::RecoContainer& recoData)
   // Osservabile vs DeltaT (evento ITS e evento ZDC-tagged più vicino).
 
   // print tagged orbit-bc
-  if (ZDCtag.size()>0){
-    for (auto ob : ZDCtag){
+  if (ZDCAtag.size()>0){
+    for (auto ob : ZDCAtag){
       for (auto b : ob.second){
 	LOGP(info,"ZNAC background on orbit/bc {}/{}",ob.first,b);
+      }
+    }
+  }
+  if (ZDCCtag.size()>0){
+    for (auto ob : ZDCCtag){
+      for (auto b : ob.second){
+	LOGP(info,"ZNCC background on orbit/bc {}/{}",ob.first,b);
       }
     }
   }
@@ -632,7 +768,6 @@ int ITSZDCAnomalyStudy::ChipToLayer(int chip){
   return 6;
 }
 
-
 double ITSZDCAnomalyStudy::ChipToPhi(int chip){
    
   int staveinlayer = (int)(chip/9);
@@ -649,6 +784,11 @@ int ITSZDCAnomalyStudy::bcdistance(long orb1, int bc1, long orb2, int bc2){ // r
   int dOBC = static_cast<int>(dOrb * 3564);
   if (dOrb > 0) return dOBC - bc1 + bc2;
   else return 0-ITSZDCAnomalyStudy::bcdistance(orb2,bc2,orb1,bc1);
+}
+
+std::pair<long,int> ITSZDCAnomalyStudy::shiftbc(long orbit, int bc, int shift){
+  // TO BE IMPLEMENTED
+  return std::make_pair(orbit,bc);
 }
 
 
