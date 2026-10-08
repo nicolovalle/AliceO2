@@ -57,6 +57,8 @@ using namespace o2::globaltracking;
 
 using GTrackID = o2::dataformats::GlobalTrackID;
 
+std::vector<int> mExcludedChipMC = {66, 67, 68, 75, 76, 77, 84, 85, 86, 93, 94, 95, 102, 103, 104, 265, 266, 267, 274, 275, 276, 283, 284, 285, 413, 414, 415, 422, 423, 424, 431, 432, 433};
+
 class EfficiencyStudy final : public Task
 {
  public:

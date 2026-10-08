@@ -15,7 +15,8 @@ SOURCES src/ImpactParameter.cxx
         src/PIDStudy.cxx
         src/ITSStudiesConfigParam.cxx
         src/AnomalyStudy.cxx
-	src/ITSBeamBackgroundStudy.cxx
+        src/ITSBeamBackgroundStudy.cxx
+        src/ITSBeamBackgroundStudyML.cxx
         src/TrackCheck.cxx
         src/TrackExtension.cxx
         src/Efficiency.cxx
@@ -34,3 +35,15 @@ HEADERS include/ITSStudies/ITSStudiesConfigParam.h
 LINKDEF src/ITSStudiesLinkDef.h)
 
 add_subdirectory(macros)
+
+o2_add_test(its-cluster-anomaly-model
+            SOURCES test/testITSClusterAnomalyModel.cxx
+            COMPONENT_NAME its-postprocessing
+            LABELS "its;ml"
+            PUBLIC_LINK_LIBRARIES O2::ITSPostprocessing)
+
+o2_add_test(its-beambkg-ml-options
+            SOURCES test/testITSBeamBackgroundStudyMLOptions.cxx
+            COMPONENT_NAME its-postprocessing
+            LABELS "its;ml"
+            PUBLIC_LINK_LIBRARIES O2::ITSPostprocessing)

@@ -738,7 +738,9 @@ DataProcessorSpec getITSBeamBackgroundStudy(mask_t srcTracksMask, mask_t srcClus
                                                               dataRequest->inputs,
                                                               true);
   return DataProcessorSpec{
-    "its-beambkg-study",
+    // DPL also creates an option group named after the processor. Keep it distinct
+    // from the boolean workflow flag --its-beambkg-study.
+    "its-beambkg-study-task",
     dataRequest->inputs,
     outputs,
     AlgorithmSpec{adaptFromTask<ITSBeamBackgroundStudy>(dataRequest, ggRequest, useMC)},

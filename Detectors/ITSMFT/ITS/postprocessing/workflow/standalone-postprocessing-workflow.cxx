@@ -24,6 +24,7 @@
 #include "ITSStudies/PIDStudy.h"
 #include "ITSStudies/AnomalyStudy.h"
 #include "ITSStudies/ITSBeamBackgroundStudy.h"
+#include "ITSStudies/ITSBeamBackgroundStudyML.h"
 #include "ITSStudies/Efficiency.h"
 #include "ITSStudies/TrackCheck.h"
 #include "ITSStudies/TrackExtension.h"
@@ -54,6 +55,7 @@ void customize(std::vector<ConfigParamSpec>& workflowOptions)
     {"impact-parameter-study", VariantType::Bool, false, {"Perform the impact parameter study"}},
     {"anomaly-study", VariantType::Bool, false, {"Perform the anomaly study"}},
     {"its-beambkg-study", VariantType::Bool, false, {"Perform the ITS beam background study"}},
+    {"its-beambkg-ml", VariantType::Bool, false, {"Fit unsupervised anomaly models on inner-barrel clusters and score the full run"}},
     {"track-extension-study", VariantType::Bool, false, {"Perform the track extension study"}},
     {"efficiency-study", VariantType::Bool, false, {"Perform the efficiency study"}},
     {"configKeyValues", VariantType::String, "", {"Semicolon separated key=value strings ..."}}};
@@ -127,6 +129,15 @@ WorkflowSpec defineDataProcessing(ConfigContext const& configcontext)
       o2::globaltracking::InputHelper::addInputSpecs(configcontext, specs, srcCls, srcTrc, srcTrc, useMC, srcCls, srcTrc);
     }
     specs.emplace_back(o2::its::study::getITSBeamBackgroundStudy(srcTrc, srcCls, useMC, doStag));
+  }
+  if (configcontext.options().get<bool>("its-beambkg-ml")) {
+    anyStudy = true;
+    const auto itsClusters = GID::getSourcesMask("ITS");
+    const GID::mask_t noTracks{};
+    if (!configcontext.options().get<bool>("input-from-upstream")) {
+      o2::globaltracking::InputHelper::addInputSpecs(configcontext, specs, itsClusters, noTracks, noTracks, useMC, itsClusters, noTracks);
+    }
+    specs.emplace_back(o2::its::study::getITSBeamBackgroundStudyML(useMC, doStag));
   }
   if (configcontext.options().get<bool>("track-extension-study")) {
     if (!useMC) {
